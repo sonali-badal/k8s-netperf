@@ -799,26 +799,16 @@ func executeWorkload(nc config.Config,
 		npr.SriovInfo = fmt.Sprintf("sriov/%s", s.SriovNetwork)
 	} else if s.BridgeNetwork != "" {
 		if virt {
-			// VMs use static bridge IPs from bridgeNetwork.json (configured in the guest via cloud-init)
-			if s.BridgeServerNetwork != "" {
-				serverIP = strings.Split(s.BridgeServerNetwork, "/")[0]
-				npr.BridgeInfo = fmt.Sprintf("VM Bridge (%s)", serverIP)
-			} else if len(s.VMServer.Items) > 0 {
-				serverIP, err = k8s.ExtractBridgeIp(s.VMServer.Items[0], s.BridgeNetwork, s.BridgeNamespace)
-				if err != nil {
-					log.Fatalf("Failed to extract bridge IP from VM server: %v", err)
-				}
-				npr.BridgeInfo = fmt.Sprintf("%s/%s", s.BridgeNamespace, s.BridgeNetwork)
-			} else {
-				log.Fatal("no VM server available for bridge network test")
+			// VMs use static bridge IPs from bridgeNetwork.json (loaded via parseNetworkConfig when --vm --bridge)
+			if s.BridgeServerNetwork == "" {
+				log.Fatal("bridge server network not configured: ensure bridgeNetwork.json is valid when using --vm --bridge")
 			}
+			serverIP = strings.Split(s.BridgeServerNetwork, "/")[0]
+			npr.BridgeInfo = fmt.Sprintf("VM Bridge (%s)", serverIP)
 		} else {
-			// For regular pods, extract bridge IP from network status
 			serverIP, err = k8s.ExtractBridgeIp(s.Server.Items[0], s.BridgeNetwork, s.BridgeNamespace)
 			if err != nil {
-				log.Errorf("Failed to extract bridge IP: %v", err)
-				// Fall back to default IP
-				serverIP = s.Server.Items[0].Status.PodIP
+				log.Fatalf("Failed to extract bridge IP: %v", err)
 			}
 			npr.BridgeInfo = fmt.Sprintf("%s/%s", s.BridgeNamespace, s.BridgeNetwork)
 		}
@@ -830,10 +820,6 @@ func executeWorkload(nc config.Config,
 		}
 		log.Debugf("Using MACVLAN network IP: %s", serverIP)
 		npr.MacvlanInfo = fmt.Sprintf("macvlan/%s", s.MacvlanNetwork)
-	} else if s.BridgeServerNetwork != "" {
-		// For VMs, use static bridge IP from JSON config
-		serverIP = strings.Split(s.BridgeServerNetwork, "/")[0]
-		npr.BridgeInfo = fmt.Sprintf("VM Bridge (%s)", serverIP)
 	} else {
 		if virt {
 			serverIP = s.VMServer.Items[0].Status.PodIP
